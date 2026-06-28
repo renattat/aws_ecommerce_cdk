@@ -5,38 +5,69 @@ import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.StackProps;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
 public class ECommercerEcsCdkApp {
     public static void main(final String[] args) {
         App app = new App();
 
-        new ECommercerEcsCdkStack(app, "ECommercerEcsCdkStack", StackProps.builder()
-                // If you don't specify 'env', this stack will be environment-agnostic.
-                // Account/Region-dependent features and context lookups will not work,
-                // but a single synthesized template can be deployed anywhere.
+        Environment environment = Environment.builder()
+                .account("520070583504")
+                .region("us-east-1")
+                .build();
 
-                // Uncomment the next block to specialize this stack for the AWS Account
-                // and Region that are implied by the current CLI configuration.
-                /*
-                .env(Environment.builder()
-                        .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
-                        .region(System.getenv("CDK_DEFAULT_REGION"))
-                        .build())
-                */
+        Map<String, String> infraTags = new HashMap<>();
+        infraTags.put("team", "RenatAws");
+        infraTags.put("cost", "ECommerceInfra");
 
-                // Uncomment the next block if you know exactly what Account and Region you
-                // want to deploy the stack to.
-                /*
-                .env(Environment.builder()
-                        .account("123456789012")
-                        .region("us-east-1")
-                        .build())
-                */
-
-                // For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html
+        EcrStack ecrStack = new EcrStack(app, "Ecr", StackProps.builder()
+                .env(environment)
+                .tags(infraTags)
                 .build());
+
+        VpcStack vpcStack = new VpcStack(app, "Vpc", StackProps.builder()
+                .env(environment)
+                .tags(infraTags)
+                .build());
+
+        ClusterStack clusterStack = new ClusterStack(app, "Cluster", StackProps.builder()
+                .env(environment)
+                .tags(infraTags)
+                .build(), new ClusterStackProps(vpcStack.getVpc()));
+        clusterStack.addDependency(vpcStack);
+
+        NlbStack nlbStack = new NlbStack(app, "Nlb", StackProps.builder()
+                .env(environment)
+                .tags(infraTags)
+                .build(), new NlbStackProps(vpcStack.getVpc()));
+        nlbStack.addDependency(vpcStack);
+
+        Map<String, String> productsServiceTags = new HashMap<>();
+        infraTags.put("team", "RenatAws");
+        infraTags.put("cost", "ProductsService");
+
+        ProductsServiceStack productsServiceStack = new ProductsServiceStack(app, "ProductsService",
+                StackProps.builder()
+                .env(environment)
+                .tags(productsServiceTags)
+                .build(),
+                new ProductsServiceProps(
+                        vpcStack.getVpc(),
+                        clusterStack.getCluster(),
+                        nlbStack.getNetworkLoadBalancer(),
+                        nlbStack.getApplicationLoadBalancer(),
+                        ecrStack.getProductsServiceRepository()));
+        productsServiceStack.addDependency(vpcStack);
+        productsServiceStack.addDependency(clusterStack);
+        productsServiceStack.addDependency(nlbStack);
+        productsServiceStack.addDependency(ecrStack);
 
         app.synth();
     }
+    // cdk list
+    // cdk destroy Vpc Cluster Nlb ProductsService
+    // cdk deploy --all --require-approval never
+
 }
 
