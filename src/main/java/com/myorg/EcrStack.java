@@ -19,7 +19,7 @@ public class EcrStack extends Stack {
                 .repositoryName("productsservice")
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .imageTagMutability(TagMutability.IMMUTABLE)
-                .emptyOnDelete(true)
+                .autoDeleteImages(true)
                 .build());
     }
 

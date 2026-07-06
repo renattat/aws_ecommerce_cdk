@@ -14,7 +14,6 @@ public class ClusterStack extends Stack {
                         final StackProps props, ClusterStackProps clusterStackProps) {
         super(scope, id, props);
 
-//        clusterStackProps.vpc()
         this.cluster = new Cluster(this, "Cluster", ClusterProps.builder()
                 .clusterName("ECommerce")
                 .vpc(clusterStackProps.vpc())

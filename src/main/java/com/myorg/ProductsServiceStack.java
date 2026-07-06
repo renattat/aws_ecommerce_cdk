@@ -4,6 +4,7 @@ import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
+import software.amazon.awscdk.services.dynamodb.*;
 import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.Vpc;
@@ -28,13 +29,30 @@ public class ProductsServiceStack extends Stack {
                                 final StackProps props, ProductsServiceProps productsServiceProps) {
         super(scope, id, props);
 
-        FargateTaskDefinition fargateTaskDefinition = new FargateTaskDefinition(this,
-                                                        "TaskDefinition",
+        Table productsDdb = new Table(this, "ProductsDdb",
+                TableProps.builder()
+                        .partitionKey(Attribute.builder()
+                                .name("id")
+                                .type(AttributeType.STRING)
+                                .build())
+                        .tableName("products")
+                        .removalPolicy(RemovalPolicy.DESTROY)
+                        .billingMode(BillingMode.PROVISIONED)
+                        .readCapacity(1)
+                        .writeCapacity(1)
+                        .build());
+
+
+
+        FargateTaskDefinition fargateTaskDefinition = new FargateTaskDefinition(this, "TaskDefinition",
                 FargateTaskDefinitionProps.builder()
                         .family("products-service")
                         .cpu(512)
                         .memoryLimitMiB(1024)
                         .build());
+
+        productsDdb.grantReadWriteData(fargateTaskDefinition.getTaskRole());
+
         AwsLogDriver logDriver = new AwsLogDriver(AwsLogDriverProps.builder()
                 .logGroup(new LogGroup(this, "LogGroup",
                         LogGroupProps.builder()
@@ -46,22 +64,26 @@ public class ProductsServiceStack extends Stack {
                 .build());
 
         Map<String, String> envVariables = new HashMap<>();
-        envVariables.put("SERVER_PORT", "9090");
+        envVariables.put("SERVER_PORT", "8080");
+        envVariables.put("AWS_PRODUCTSDDB_NAME", productsDdb.getTableName());
+        envVariables.put("AWS_REGION", this.getRegion());
+
+
         fargateTaskDefinition.addContainer("ProductsServiceContainer",
                 ContainerDefinitionOptions.builder()
                         .image(ContainerImage.fromEcrRepository(productsServiceProps.repository(), "1.0.0"))
                         .containerName("productsservice")
                         .logging(logDriver)
                         .portMappings(Collections.singletonList(PortMapping.builder()
-                                        .containerPort(9090)
-                                        .protocol(Protocol.TCP)
+                                .containerPort(8080)
+                                .protocol(Protocol.TCP)
                                 .build()))
                         .environment(envVariables)
                         .build());
 
         ApplicationListener applicationListener = productsServiceProps.applicationLoadBalancer()
                 .addListener("ProductsServiceAlbListener", ApplicationListenerProps.builder()
-                        .port(9090)
+                        .port(8080)
                         .protocol(ApplicationProtocol.HTTP)
                         .loadBalancer(productsServiceProps.applicationLoadBalancer())
                         .build());
@@ -73,15 +95,15 @@ public class ProductsServiceStack extends Stack {
                         .taskDefinition(fargateTaskDefinition)
                         .desiredCount(2)
                         .assignPublicIp(true)
+//                        .assignPublicIp(false)
                         .build());
         productsServiceProps.repository().grantPull(Objects.requireNonNull(fargateTaskDefinition.getExecutionRole()));
-        fargateService.getConnections().getSecurityGroups().get(0).addIngressRule(Peer.anyIpv4(), Port.tcp(9090));
-
+        fargateService.getConnections().getSecurityGroups().get(0).addIngressRule(Peer.anyIpv4(), Port.tcp(8080));
 
         applicationListener.addTargets("ProductsServiceAlbTarget",
                 AddApplicationTargetsProps.builder()
                         .targetGroupName("productsServiceAlb")
-                        .port(9090)
+                        .port(8080)
                         .protocol(ApplicationProtocol.HTTP)
                         .targets(Collections.singletonList(fargateService))
                         .deregistrationDelay(Duration.seconds(30))
@@ -90,43 +112,37 @@ public class ProductsServiceStack extends Stack {
                                 .interval(Duration.seconds(30))
                                 .timeout(Duration.seconds(10))
                                 .path("/actuator/health")
-                                .port("9090")
+                                .port("8080")
                                 .build())
                         .build()
-                );
+        );
 
         NetworkListener networkListener = productsServiceProps.networkLoadBalancer()
                 .addListener("ProductsServiceNlbListener", BaseNetworkListenerProps.builder()
-                        .port(9090)
-                        .protocol(software.amazon.awscdk.services.elasticloadbalancingv2.Protocol.TCP)
+                        .port(8080)
+                        .protocol(
+                                software.amazon.awscdk.services.elasticloadbalancingv2.Protocol.TCP
+                        )
                         .build());
+
         networkListener.addTargets("ProductsServiceNlbTarget",
                 AddNetworkTargetsProps.builder()
-                        .port(9090)
+                        .port(8080)
                         .protocol(software.amazon.awscdk.services.elasticloadbalancingv2.Protocol.TCP)
-                        .targetGroupName("productServiceNlb")
+                        .targetGroupName("productsServiceNlb")
                         .targets(Collections.singletonList(
                                 fargateService.loadBalancerTarget(LoadBalancerTargetOptions.builder()
                                         .containerName("productsservice")
-                                        .containerPort(9090)
+                                        .containerPort(8080)
                                         .protocol(Protocol.TCP)
-                                        .build()
-                        )))
+                                        .build())
+                        ))
                         .build()
-                );
-
-
+        );
     }
 }
 
-record
-
-
-
-
-
-
-ProductsServiceProps(
+record ProductsServiceProps(
         Vpc vpc,
         Cluster cluster,
         NetworkLoadBalancer networkLoadBalancer,

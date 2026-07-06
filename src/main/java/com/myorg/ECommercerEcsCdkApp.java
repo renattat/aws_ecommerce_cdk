@@ -4,7 +4,6 @@ import software.amazon.awscdk.App;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.StackProps;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -49,9 +48,9 @@ public class ECommercerEcsCdkApp {
 
         ProductsServiceStack productsServiceStack = new ProductsServiceStack(app, "ProductsService",
                 StackProps.builder()
-                .env(environment)
-                .tags(productsServiceTags)
-                .build(),
+                        .env(environment)
+                        .tags(productsServiceTags)
+                        .build(),
                 new ProductsServiceProps(
                         vpcStack.getVpc(),
                         clusterStack.getCluster(),
@@ -63,11 +62,23 @@ public class ECommercerEcsCdkApp {
         productsServiceStack.addDependency(nlbStack);
         productsServiceStack.addDependency(ecrStack);
 
+        ApiStack apiStack = new ApiStack(app, "Api", StackProps.builder()
+                .env(environment)
+                .tags(infraTags)
+                .build(),
+                new ApiStackProps(
+                        nlbStack.getNetworkLoadBalancer(),
+                        nlbStack.getVpcLink()));
+
+        apiStack.addDependency(nlbStack);
+
+
         app.synth();
     }
     // cdk list
-    // cdk destroy Vpc Cluster Nlb ProductsService
+    // cdk destroy Vpc Cluster Nlb ProductsService Api
     // cdk deploy --all --require-approval never
+
 
 }
 
