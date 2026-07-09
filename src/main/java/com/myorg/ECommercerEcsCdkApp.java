@@ -78,7 +78,7 @@ public class ECommercerEcsCdkApp {
     // cdk list
     // cdk destroy Vpc Cluster Nlb ProductsService Api
     // cdk deploy --all --require-approval never
-
+    // cdk diff
 
 }
 

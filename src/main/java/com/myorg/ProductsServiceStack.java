@@ -13,6 +13,7 @@ import software.amazon.awscdk.services.ecs.*;
 import software.amazon.awscdk.services.ecs.Protocol;
 import software.amazon.awscdk.services.elasticloadbalancingv2.*;
 import software.amazon.awscdk.services.elasticloadbalancingv2.HealthCheck;
+import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.logs.LogGroupProps;
 import software.amazon.awscdk.services.logs.RetentionDays;
@@ -43,7 +44,6 @@ public class ProductsServiceStack extends Stack {
                         .build());
 
 
-
         FargateTaskDefinition fargateTaskDefinition = new FargateTaskDefinition(this, "TaskDefinition",
                 FargateTaskDefinitionProps.builder()
                         .family("products-service")
@@ -67,11 +67,14 @@ public class ProductsServiceStack extends Stack {
         envVariables.put("SERVER_PORT", "8080");
         envVariables.put("AWS_PRODUCTSDDB_NAME", productsDdb.getTableName());
         envVariables.put("AWS_REGION", this.getRegion());
+        envVariables.put("AWS_XRAY_DAEMON_ADDRESS", "0.0.0.0:2000");
+        envVariables.put("AWS_XRAY_CONTEXT_MISSING", "IGNORE");
+        envVariables.put("AWS_XRAY_TRACING_NAME", "productsservice");
 
 
         fargateTaskDefinition.addContainer("ProductsServiceContainer",
                 ContainerDefinitionOptions.builder()
-                        .image(ContainerImage.fromEcrRepository(productsServiceProps.repository(), "1.0.0"))
+                        .image(ContainerImage.fromEcrRepository(productsServiceProps.repository(), "1.3.0"))
                         .containerName("productsservice")
                         .logging(logDriver)
                         .portMappings(Collections.singletonList(PortMapping.builder()
@@ -79,7 +82,30 @@ public class ProductsServiceStack extends Stack {
                                 .protocol(Protocol.TCP)
                                 .build()))
                         .environment(envVariables)
+                        .cpu(384)
+                        .memoryLimitMiB(896)
                         .build());
+
+        fargateTaskDefinition.addContainer("xray", ContainerDefinitionOptions.builder()
+                .image(ContainerImage.fromRegistry("public.ecr.aws/xray/aws-xray-daemon:latest"))
+                .containerName("XRayProductsService")
+                .logging(new AwsLogDriver(AwsLogDriverProps.builder()
+                        .logGroup(new LogGroup(this, "XRayLogGroup",
+                                LogGroupProps.builder()
+                                        .logGroupName("XRayProductsService")
+                                        .removalPolicy(RemovalPolicy.DESTROY)
+                                        .retention(RetentionDays.ONE_MONTH)
+                                        .build()))
+                        .streamPrefix("XRayProductsService")
+                        .build()))
+                .portMappings(Collections.singletonList(PortMapping.builder()
+                        .containerPort(2000)
+                        .protocol(Protocol.UDP)
+                        .build()))
+                        .cpu(128)
+                        .memoryLimitMiB(128)
+                .build());
+        fargateTaskDefinition.getTaskRole().addManagedPolicy(ManagedPolicy.fromAwsManagedPolicyName("AWSXRayWriteOnlyAccess"));
 
         ApplicationListener applicationListener = productsServiceProps.applicationLoadBalancer()
                 .addListener("ProductsServiceAlbListener", ApplicationListenerProps.builder()
