@@ -70,11 +70,12 @@ public class ProductsServiceStack extends Stack {
         envVariables.put("AWS_XRAY_DAEMON_ADDRESS", "0.0.0.0:2000");
         envVariables.put("AWS_XRAY_CONTEXT_MISSING", "IGNORE");
         envVariables.put("AWS_XRAY_TRACING_NAME", "productsservice");
+        envVariables.put("LOGGING_LEVEL_ROOT", "INFO" );
 
 
         fargateTaskDefinition.addContainer("ProductsServiceContainer",
                 ContainerDefinitionOptions.builder()
-                        .image(ContainerImage.fromEcrRepository(productsServiceProps.repository(), "1.3.0"))
+                        .image(ContainerImage.fromEcrRepository(productsServiceProps.repository(), "1.4.0"))
                         .containerName("productsservice")
                         .logging(logDriver)
                         .portMappings(Collections.singletonList(PortMapping.builder()
