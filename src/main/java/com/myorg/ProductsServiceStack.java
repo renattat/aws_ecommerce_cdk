@@ -9,10 +9,10 @@ import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.Vpc;
 import software.amazon.awscdk.services.ecr.Repository;
-import software.amazon.awscdk.services.ecs.*;
 import software.amazon.awscdk.services.ecs.Protocol;
-import software.amazon.awscdk.services.elasticloadbalancingv2.*;
+import software.amazon.awscdk.services.ecs.*;
 import software.amazon.awscdk.services.elasticloadbalancingv2.HealthCheck;
+import software.amazon.awscdk.services.elasticloadbalancingv2.*;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.logs.LogGroupProps;
@@ -42,6 +42,17 @@ public class ProductsServiceStack extends Stack {
                         .readCapacity(1)
                         .writeCapacity(1)
                         .build());
+
+        productsDdb.addGlobalSecondaryIndex(GlobalSecondaryIndexProps.builder()
+                        .indexName("codeIdx")
+                        .partitionKey(Attribute.builder()
+                                .name("code")
+                                .type(AttributeType.STRING)
+                                .build())
+                        .projectionType(ProjectionType.KEYS_ONLY)
+                        .readCapacity(1)
+                        .writeCapacity(1)
+                .build());
 
 
         FargateTaskDefinition fargateTaskDefinition = new FargateTaskDefinition(this, "TaskDefinition",
@@ -75,7 +86,7 @@ public class ProductsServiceStack extends Stack {
 
         fargateTaskDefinition.addContainer("ProductsServiceContainer",
                 ContainerDefinitionOptions.builder()
-                        .image(ContainerImage.fromEcrRepository(productsServiceProps.repository(), "1.4.0"))
+                        .image(ContainerImage.fromEcrRepository(productsServiceProps.repository(), "1.6.0"))
                         .containerName("productsservice")
                         .logging(logDriver)
                         .portMappings(Collections.singletonList(PortMapping.builder()
