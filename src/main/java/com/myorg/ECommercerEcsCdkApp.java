@@ -62,6 +62,26 @@ public class ECommercerEcsCdkApp {
         productsServiceStack.addDependency(nlbStack);
         productsServiceStack.addDependency(ecrStack);
 
+        Map<String, String> auditServiceTags = new HashMap<>();
+        auditServiceTags.put("team", "RenatAws");
+        auditServiceTags.put("cost", "AuditService");
+
+        AuditServiceStack auditServiceProps = new AuditServiceStack(app, "AuditService",
+                StackProps.builder()
+                        .env(environment)
+                        .tags(auditServiceTags)
+                        .build(),
+                new AuditServiceProps(
+                        vpcStack.getVpc(),
+                        clusterStack.getCluster(),
+                        nlbStack.getNetworkLoadBalancer(),
+                        nlbStack.getApplicationLoadBalancer(),
+                        ecrStack.getAuditServiceRepository()));
+        auditServiceProps.addDependency(vpcStack);
+        auditServiceProps.addDependency(clusterStack);
+        auditServiceProps.addDependency(nlbStack);
+        auditServiceProps.addDependency(ecrStack);
+
         ApiStack apiStack = new ApiStack(app, "Api", StackProps.builder()
                 .env(environment)
                 .tags(infraTags)
@@ -76,7 +96,7 @@ public class ECommercerEcsCdkApp {
         app.synth();
     }
     // cdk list
-    // cdk destroy Vpc Cluster Nlb ProductsService Api
+    // cdk destroy Vpc Cluster Nlb ProductsService AuditService Api
     // cdk deploy --all --require-approval never
     // cdk diff
 
