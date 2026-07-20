@@ -41,13 +41,6 @@ public class ProductsServiceStack extends Stack {
                 .topicName("product-events")
                 .build());
 
-        // to test if publisher is working
-        // TODO - to be removal
-        this.productEventsTopic.addSubscription(new EmailSubscription("renat.tat@mail.ru",
-                EmailSubscriptionProps.builder()
-                        .json(true)
-                        .build()));
-
         Table productsDdb = new Table(this, "ProductsDdb",
                 TableProps.builder()
                         .partitionKey(Attribute.builder()

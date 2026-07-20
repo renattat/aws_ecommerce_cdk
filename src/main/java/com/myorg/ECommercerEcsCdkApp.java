@@ -66,7 +66,7 @@ public class ECommercerEcsCdkApp {
         auditServiceTags.put("team", "RenatAws");
         auditServiceTags.put("cost", "AuditService");
 
-        AuditServiceStack auditServiceProps = new AuditServiceStack(app, "AuditService",
+        AuditServiceStack auditServiceStack = new AuditServiceStack(app, "AuditService",
                 StackProps.builder()
                         .env(environment)
                         .tags(auditServiceTags)
@@ -76,11 +76,14 @@ public class ECommercerEcsCdkApp {
                         clusterStack.getCluster(),
                         nlbStack.getNetworkLoadBalancer(),
                         nlbStack.getApplicationLoadBalancer(),
-                        ecrStack.getAuditServiceRepository()));
-        auditServiceProps.addDependency(vpcStack);
-        auditServiceProps.addDependency(clusterStack);
-        auditServiceProps.addDependency(nlbStack);
-        auditServiceProps.addDependency(ecrStack);
+                        ecrStack.getAuditServiceRepository(),
+                        productsServiceStack.getProductEventsTopic()));
+        auditServiceStack.addDependency(vpcStack);
+        auditServiceStack.addDependency(clusterStack);
+        auditServiceStack.addDependency(nlbStack);
+        auditServiceStack.addDependency(ecrStack);
+        auditServiceStack.addDependency(productsServiceStack);
+
 
         ApiStack apiStack = new ApiStack(app, "Api", StackProps.builder()
                 .env(environment)

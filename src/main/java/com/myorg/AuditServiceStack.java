@@ -16,6 +16,13 @@ import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.logs.LogGroupProps;
 import software.amazon.awscdk.services.logs.RetentionDays;
+import software.amazon.awscdk.services.sns.Topic;
+import software.amazon.awscdk.services.sns.subscriptions.SmsSubscription;
+import software.amazon.awscdk.services.sns.subscriptions.SqsSubscription;
+import software.amazon.awscdk.services.sqs.DeadLetterQueue;
+import software.amazon.awscdk.services.sqs.Queue;
+import software.amazon.awscdk.services.sqs.QueueEncryption;
+import software.amazon.awscdk.services.sqs.QueueProps;
 import software.constructs.Construct;
 
 import java.util.Collections;
@@ -28,6 +35,29 @@ public class AuditServiceStack extends Stack {
                              final StackProps props, AuditServiceProps auditServiceProps) {
         super(scope, id, props);
 
+        Queue productEventsDlq = new Queue(this, "ProductEventDlq",
+                QueueProps.builder()
+                        .queueName("product-events-dlq")
+                        .retentionPeriod(Duration.days(1))
+                        .enforceSsl(false)
+                        .encryption(QueueEncryption.UNENCRYPTED)
+                        .build());
+
+        Queue productEventsQueue = new Queue(this, "ProductEventsQueue",
+                QueueProps.builder()
+                        .queueName("product-events")
+                        .enforceSsl(false)
+                        .encryption(QueueEncryption.UNENCRYPTED)
+                        .deadLetterQueue(DeadLetterQueue
+                                .builder()
+                                .queue(productEventsDlq)
+                                .maxReceiveCount(3)
+                                .build())
+                        .build()
+                );
+
+        auditServiceProps.productEventsTopic().addSubscription(new SqsSubscription(productEventsQueue));
+
         FargateTaskDefinition fargateTaskDefinition = new FargateTaskDefinition(this, "TaskDefinition",
                 FargateTaskDefinitionProps.builder()
                         .family("audit-service")
@@ -36,6 +66,7 @@ public class AuditServiceStack extends Stack {
                         .build());
 
         fargateTaskDefinition.getTaskRole().addManagedPolicy(ManagedPolicy.fromAwsManagedPolicyName("AWSXRayWriteOnlyAccess"));
+        productEventsQueue.grantConsumeMessages(fargateTaskDefinition.getTaskRole());
 
         AwsLogDriver logDriver = new AwsLogDriver(AwsLogDriverProps.builder()
                 .logGroup(new LogGroup(this, "LogGroup",
@@ -53,11 +84,12 @@ public class AuditServiceStack extends Stack {
         envVariables.put("AWS_XRAY_DAEMON_ADDRESS", "0.0.0.0:2000");
         envVariables.put("AWS_XRAY_CONTEXT_MISSING", "IGNORE");
         envVariables.put("AWS_XRAY_TRACING_NAME", "auditservice");
+        envVariables.put("AWS_SQS_QUEUE_PRODUCT_EVENTS_URL", productEventsQueue.getQueueUrl());
         envVariables.put("LOGGING_LEVEL_ROOT", "INFO");
 
         fargateTaskDefinition.addContainer("AuditServiceContainer",
                 ContainerDefinitionOptions.builder()
-                        .image(ContainerImage.fromEcrRepository(auditServiceProps.repository(), "1.0.0"))
+                        .image(ContainerImage.fromEcrRepository(auditServiceProps.repository(), "1.1.0"))
                         .containerName("auditservice")
                         .logging(logDriver)
                         .portMappings(Collections.singletonList(PortMapping.builder()
@@ -161,6 +193,7 @@ record AuditServiceProps(
         Cluster cluster,
         NetworkLoadBalancer networkLoadBalancer,
         ApplicationLoadBalancer applicationLoadBalancer,
-        Repository repository
+        Repository repository,
+        Topic productEventsTopic
 ) {
 }
