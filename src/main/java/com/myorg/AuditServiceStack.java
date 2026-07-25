@@ -4,6 +4,7 @@ import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
+import software.amazon.awscdk.services.dynamodb.*;
 import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.Vpc;
@@ -35,6 +36,23 @@ public class AuditServiceStack extends Stack {
                              final StackProps props, AuditServiceProps auditServiceProps) {
         super(scope, id, props);
 
+        Table eventsDdb = new Table(this, "EventsDdb", TableProps.builder()
+                .tableName("events")
+                .removalPolicy(RemovalPolicy.DESTROY)
+                .partitionKey(Attribute.builder()
+                        .name("pk")
+                        .type(AttributeType.STRING)
+                        .build())
+                .sortKey(Attribute.builder()
+                        .name("sk")
+                        .type(AttributeType.STRING)
+                        .build())
+                .timeToLiveAttribute("ttl")
+                .billingMode(BillingMode.PROVISIONED)
+                .readCapacity(1)
+                .writeCapacity(1)
+                .build());
+
         Queue productEventsDlq = new Queue(this, "ProductEventDlq",
                 QueueProps.builder()
                         .queueName("product-events-dlq")
@@ -56,9 +74,9 @@ public class AuditServiceStack extends Stack {
                         .build()
         );
         Map<String, SubscriptionFilter> productsFilterPolicy = new HashMap<>();
-        productsFilterPolicy.put("EventType", SubscriptionFilter.stringFilter(
+        productsFilterPolicy.put("eventType", SubscriptionFilter.stringFilter(
                 StringConditions.builder()
-                        .allowlist(Arrays.asList("PRODUCT_CRATED", "PRODUCT_UPDATED", "PRODUCT_DELETED"))
+                        .allowlist(Arrays.asList("PRODUCT_CREATED", "PRODUCT_UPDATED", "PRODUCT_DELETED"))
                         .build()
         ));
 
@@ -80,7 +98,7 @@ public class AuditServiceStack extends Stack {
                         .build()
         );
         Map<String, SubscriptionFilter> productsFailureFilterPolicy = new HashMap<>();
-        productsFailureFilterPolicy.put("EventType", SubscriptionFilter.stringFilter(
+        productsFailureFilterPolicy.put("eventType", SubscriptionFilter.stringFilter(
                 StringConditions.builder()
                         .allowlist(Collections.singletonList("PRODUCT_FAILURE"))
                         .build()
@@ -90,7 +108,6 @@ public class AuditServiceStack extends Stack {
                 new SqsSubscription(productFailureEventsQueue, SqsSubscriptionProps.builder()
                         .filterPolicy(productsFailureFilterPolicy)
                         .build()));
-
 
 
         FargateTaskDefinition fargateTaskDefinition = new FargateTaskDefinition(this, "TaskDefinition",
@@ -103,6 +120,7 @@ public class AuditServiceStack extends Stack {
         fargateTaskDefinition.getTaskRole().addManagedPolicy(ManagedPolicy.fromAwsManagedPolicyName("AWSXRayWriteOnlyAccess"));
         productEventsQueue.grantConsumeMessages(fargateTaskDefinition.getTaskRole());
         productFailureEventsQueue.grantConsumeMessages(fargateTaskDefinition.getTaskRole());
+        eventsDdb.grantReadWriteData(fargateTaskDefinition.getTaskRole());
 
         AwsLogDriver logDriver = new AwsLogDriver(AwsLogDriverProps.builder()
                 .logGroup(new LogGroup(this, "LogGroup",
@@ -122,11 +140,12 @@ public class AuditServiceStack extends Stack {
         envVariables.put("AWS_XRAY_TRACING_NAME", "auditservice");
         envVariables.put("AWS_SQS_QUEUE_PRODUCT_EVENTS_URL", productEventsQueue.getQueueUrl());
         envVariables.put("AWS_SQS_QUEUE_PRODUCT_FAILURE_EVENTS_URL", productFailureEventsQueue.getQueueUrl());
+        envVariables.put("AWS_EVENTS_DDB", eventsDdb.getTableName());
         envVariables.put("LOGGING_LEVEL_ROOT", "INFO");
 
         fargateTaskDefinition.addContainer("AuditServiceContainer",
                 ContainerDefinitionOptions.builder()
-                        .image(ContainerImage.fromEcrRepository(auditServiceProps.repository(), "1.2.0"))
+                        .image(ContainerImage.fromEcrRepository(auditServiceProps.repository(), "1.4.0"))
                         .containerName("auditservice")
                         .logging(logDriver)
                         .portMappings(Collections.singletonList(PortMapping.builder()
