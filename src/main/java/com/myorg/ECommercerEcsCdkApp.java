@@ -101,6 +101,7 @@ public class ECommercerEcsCdkApp {
     // cdk list
     // cdk destroy Vpc Cluster Nlb ProductsService AuditService Api
     // cdk deploy --all --require-approval never
+    // artillery run -t https://1drfqkp1xg.execute-api.us-east-1.amazonaws.com/prod loadtest.yaml
     // cdk diff
 
 }

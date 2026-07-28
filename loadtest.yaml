@@ -1,0 +1,16 @@
+config:
+  phases:
+    - duration: 300
+      # number requests per second
+      arrivalRate: 25
+  http:
+    timeout: 29
+scenarios:
+  - flow:
+     - post:
+        url: /products
+        json:
+          name: "{{ $randomString() }}"
+          code: "{{ $randomString() }}"
+          model: "{{ $randomString() }}"
+          price: 20.0

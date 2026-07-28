@@ -4,6 +4,7 @@ import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
+import software.amazon.awscdk.services.applicationautoscaling.EnableScalingProps;
 import software.amazon.awscdk.services.dynamodb.*;
 import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
@@ -49,6 +50,7 @@ public class AuditServiceStack extends Stack {
                         .build())
                 .timeToLiveAttribute("ttl")
                 .billingMode(BillingMode.PROVISIONED)
+//                .billingMode(BillingMode.PAY_PER_REQUEST)
                 .readCapacity(1)
                 .writeCapacity(1)
                 .build());
@@ -145,7 +147,7 @@ public class AuditServiceStack extends Stack {
 
         fargateTaskDefinition.addContainer("AuditServiceContainer",
                 ContainerDefinitionOptions.builder()
-                        .image(ContainerImage.fromEcrRepository(auditServiceProps.repository(), "1.4.0"))
+                        .image(ContainerImage.fromEcrRepository(auditServiceProps.repository(), "1.5.0"))
                         .containerName("auditservice")
                         .logging(logDriver)
                         .portMappings(Collections.singletonList(PortMapping.builder()
@@ -240,6 +242,20 @@ public class AuditServiceStack extends Stack {
                         .build()
         );
 
+        ScalableTaskCount scalableTaskCount = fargateService.autoScaleTaskCount(
+                EnableScalingProps.builder()
+                        .maxCapacity(4)
+                        .minCapacity(2)
+                        .build()
+        );
+
+        scalableTaskCount.scaleOnCpuUtilization("AuditServiceAutoScaling",
+                CpuUtilizationScalingProps.builder()
+                        .targetUtilizationPercent(10)
+                        .scaleInCooldown(Duration.seconds(60))
+                        .scaleOutCooldown(Duration.seconds(60))
+                        .build()
+        );
     }
 }
 
