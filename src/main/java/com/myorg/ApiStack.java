@@ -52,10 +52,52 @@ public class ApiStack extends Stack {
                                 .build())
                         .build()
         );
-        this.createProductsResource(restApi, apiStackProps);
+
+        Resource productResource = this.createProductsResource(restApi, apiStackProps);
+
+        this.createProductEventsResource(restApi, apiStackProps, productResource);
     }
 
-    private void createProductsResource(RestApi restApi, ApiStackProps apiStackProps) {
+    private void createProductEventsResource(RestApi restApi, ApiStackProps apiStackProps, Resource productsResource) {
+
+        // /products/events
+        Resource productEventsResource = productsResource.addResource("events");
+
+        Map<String, String> productEventsIntegrationParameters = new HashMap<>();
+        productEventsIntegrationParameters.put("integration.request.header.requestId", "context.requestId");
+
+        Map<String, Boolean> productEventsMethodParameters = new HashMap<>();
+        productEventsMethodParameters.put("method.request.header.requestId", false);
+        productEventsMethodParameters.put("method.request.querystring.eventType", true);
+        productEventsMethodParameters.put("method.request.querystring.limit", false);
+        productEventsMethodParameters.put("method.request.querystring.from", false);
+        productEventsMethodParameters.put("method.request.querystring.to", false);
+        productEventsMethodParameters.put("method.request.querystring.exclusiveStartTimestamp", false);
+
+        //GET /products/events?eventType=PRODUCT_CRATED&limit=10&from=1&to5&exclusiveStartTimestamp=123
+        productEventsResource.addMethod("GET", new Integration(
+                IntegrationProps.builder()
+                        .type(IntegrationType.HTTP_PROXY)
+                        .integrationHttpMethod("GET")
+                        .uri("http://" + apiStackProps.networkLoadBalancer().getLoadBalancerDnsName() +
+                                ":9090/api/products/events")
+                        .options(IntegrationOptions.builder()
+                                .vpcLink(apiStackProps.vpcLink())
+                                .connectionType(ConnectionType.VPC_LINK)
+                                .requestParameters(productEventsIntegrationParameters)
+                                .build())
+                        .build()
+        ), MethodOptions.builder()
+                        .requestValidator(new RequestValidator(this, "ProductEventsValidator", RequestValidatorProps.builder()
+                                .restApi(restApi)
+                                .requestValidatorName("ProductEventsValidator")
+                                .validateRequestParameters(true)
+                                .build()))
+                .requestParameters(productEventsMethodParameters)
+                .build());
+    }
+
+    private Resource createProductsResource(RestApi restApi, ApiStackProps apiStackProps) {
         Map<String, String> productsIntegrationParameters = new HashMap<>();
         productsIntegrationParameters.put("integration.request.header.requestId", "context.requestId");
 
@@ -209,6 +251,8 @@ public class ApiStack extends Stack {
                         .build()), MethodOptions.builder()
                 .requestParameters(productIdMethodParameters)
                 .build());
+
+        return productsResource;
     }
 }
 

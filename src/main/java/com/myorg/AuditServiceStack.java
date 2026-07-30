@@ -147,7 +147,7 @@ public class AuditServiceStack extends Stack {
 
         fargateTaskDefinition.addContainer("AuditServiceContainer",
                 ContainerDefinitionOptions.builder()
-                        .image(ContainerImage.fromEcrRepository(auditServiceProps.repository(), "1.5.0"))
+                        .image(ContainerImage.fromEcrRepository(auditServiceProps.repository(), "1.6.0"))
                         .containerName("auditservice")
                         .logging(logDriver)
                         .portMappings(Collections.singletonList(PortMapping.builder()
