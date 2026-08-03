@@ -84,6 +84,27 @@ public class ECommercerEcsCdkApp {
         auditServiceStack.addDependency(ecrStack);
         auditServiceStack.addDependency(productsServiceStack);
 
+        Map<String, String> invoicesServiceTags = new HashMap<>();
+        invoicesServiceTags.put("team", "RenatAws");
+        invoicesServiceTags.put("cost", "InvoicesService");
+
+        InvoicesServiceStack invoicesServiceStack = new InvoicesServiceStack(app, "InvoicesService",
+                StackProps.builder()
+                        .env(environment)
+                        .tags(invoicesServiceTags)
+                        .build(),
+                new InvoicesServiceProps(
+                        vpcStack.getVpc(),
+                        clusterStack.getCluster(),
+                        nlbStack.getNetworkLoadBalancer(),
+                        nlbStack.getApplicationLoadBalancer(),
+                        ecrStack.getInvoicesServiceRepository()));
+        invoicesServiceStack.addDependency(vpcStack);
+        invoicesServiceStack.addDependency(clusterStack);
+        invoicesServiceStack.addDependency(nlbStack);
+        invoicesServiceStack.addDependency(ecrStack);
+        invoicesServiceStack.addDependency(productsServiceStack);
+
 
         ApiStack apiStack = new ApiStack(app, "Api", StackProps.builder()
                 .env(environment)
@@ -99,7 +120,7 @@ public class ECommercerEcsCdkApp {
         app.synth();
     }
     // cdk list
-    // cdk destroy Vpc Cluster Nlb ProductsService AuditService Api
+    // cdk destroy Vpc Cluster Nlb ProductsService AuditService InvoicesService Api
     // cdk deploy --all --require-approval never
     // artillery run -t https://1drfqkp1xg.execute-api.us-east-1.amazonaws.com/prod loadtest.yaml
     // cdk diff

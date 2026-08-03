@@ -12,6 +12,7 @@ public class EcrStack extends Stack {
 
     private final Repository productsServiceRepository;
     private final Repository auditServiceRepository;
+    private final Repository invoicesServiceRepository;
 
     public EcrStack(final Construct scope, final String id, final StackProps props) {
         super(scope, id, props);
@@ -29,6 +30,13 @@ public class EcrStack extends Stack {
                 .imageTagMutability(TagMutability.IMMUTABLE)
                 .autoDeleteImages(true)
                 .build());
+
+        this.invoicesServiceRepository = new Repository(this, "InvoicesService", RepositoryProps.builder()
+                .repositoryName("invoicesservice")
+                .removalPolicy(RemovalPolicy.DESTROY)
+                .imageTagMutability(TagMutability.IMMUTABLE)
+                .autoDeleteImages(true)
+                .build());
     }
 
 
@@ -38,5 +46,9 @@ public class EcrStack extends Stack {
 
     public Repository getAuditServiceRepository() {
         return auditServiceRepository;
+    }
+
+    public Repository getInvoicesServiceRepository() {
+        return invoicesServiceRepository;
     }
 }
