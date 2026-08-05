@@ -56,7 +56,100 @@ public class ApiStack extends Stack {
         Resource productResource = this.createProductsResource(restApi, apiStackProps);
 
         this.createProductEventsResource(restApi, apiStackProps, productResource);
+
+        this.createInvoicesResource(restApi, apiStackProps);
     }
+
+    private void createInvoicesResource(RestApi restApi, ApiStackProps apiStackProps) {
+        // /invoices
+        Resource invoicesResource = restApi.getRoot().addResource("invoices");
+
+        Map<String, String> invoicesIntegrationParameters = new HashMap<>();
+        invoicesIntegrationParameters.put("integration.request.header.requestId", "context.requestId");
+
+        Map<String, Boolean> invoicesMethodParameters = new HashMap<>();
+        invoicesMethodParameters.put("method.request.header.requestId", false);
+
+        // POST /invoices - create a new pre-signed URL
+        invoicesResource.addMethod("POST", new Integration(IntegrationProps.builder()
+                .type(IntegrationType.HTTP_PROXY)
+                .integrationHttpMethod("POST")
+                .uri("http://" + apiStackProps.networkLoadBalancer().getLoadBalancerDnsName() +
+                        ":9095/api/invoices")
+                .options(IntegrationOptions.builder()
+                        .vpcLink(apiStackProps.vpcLink())
+                        .connectionType(ConnectionType.VPC_LINK)
+                        .requestParameters(invoicesIntegrationParameters)
+                        .build())
+                .build()), MethodOptions.builder()
+                        .requestValidator(new RequestValidator(this, "InvoicesValidator", RequestValidatorProps.builder()
+                                .restApi(restApi)
+                                .requestValidatorName("InvoicesValidator")
+                                .validateRequestParameters(true)
+                                .build()))
+                        .requestParameters(invoicesMethodParameters)
+                .build());
+
+        //GET /invoices/transactions/{fileTransactionId}
+
+        Map<String, String> invoicesFileTransactionIntegrationParameters = new HashMap<>();
+        invoicesFileTransactionIntegrationParameters.put("integration.request.path.fileTransactionId", "methods.request.path.fileTransactionId");
+        invoicesFileTransactionIntegrationParameters.put("integration.request.header.requestId", "context.requestId");
+
+        Map<String, Boolean> invoicesFileTransactionMethodParameters = new HashMap<>();
+        invoicesFileTransactionMethodParameters.put("method.request.path.fileTransactionId", true);
+        invoicesFileTransactionMethodParameters.put("method.request.header.requestId", false);
+
+        Resource invoiceTransactionsResource = invoicesResource.addResource("transactions");
+        Resource invoiceFileTransactionsResource = invoiceTransactionsResource.addResource("{fileTransactionId}");
+
+        invoiceFileTransactionsResource.addMethod("GET", new Integration(IntegrationProps.builder()
+                .type(IntegrationType.HTTP_PROXY)
+                .integrationHttpMethod("GET")
+                .uri("http://" + apiStackProps.networkLoadBalancer().getLoadBalancerDnsName() +
+                        ":9095/api/invoices/transactions/{fileTransactionId}")
+                .options(IntegrationOptions.builder()
+                        .vpcLink(apiStackProps.vpcLink())
+                        .connectionType(ConnectionType.VPC_LINK)
+                        .requestParameters(invoicesFileTransactionIntegrationParameters)
+                        .build())
+                .build()), MethodOptions.builder()
+                        .requestValidator(new RequestValidator(this, "InvoiceTransactionsValidator",
+                                RequestValidatorProps.builder()
+                                        .restApi(restApi)
+                                        .requestValidatorName("InvoiceTransactionsValidator")
+                                        .validateRequestParameters(true)
+                                        .build()
+                        ))
+                        .requestParameters(invoicesFileTransactionMethodParameters)
+                .build());
+
+        // GET /invoices?email=renat@mail.ru
+        Map<String, Boolean> customerInvoicesMethodParameters = new HashMap<>();
+        customerInvoicesMethodParameters.put("method.request.header.requestId", false);
+        customerInvoicesMethodParameters.put("method.request.querystring.email", true);
+
+        invoicesResource.addMethod("GET", new Integration(IntegrationProps.builder()
+                .type(IntegrationType.HTTP_PROXY)
+                .integrationHttpMethod("GET")
+                .uri("http://" + apiStackProps.networkLoadBalancer().getLoadBalancerDnsName() +
+                        ":9095/api/invoices")
+                .options(IntegrationOptions.builder()
+                        .vpcLink(apiStackProps.vpcLink())
+                        .connectionType(ConnectionType.VPC_LINK)
+                        .requestParameters(invoicesIntegrationParameters)
+                        .build())
+                .build()), MethodOptions.builder()
+                .requestValidator(new RequestValidator(this, "CustomerInvoicesValidator", RequestValidatorProps.builder()
+                        .restApi(restApi)
+                        .requestValidatorName("CustomerInvoicesValidator")
+                        .validateRequestParameters(true)
+                        .build()))
+                .requestParameters(customerInvoicesMethodParameters)
+                .build());
+    }
+
+
 
     private void createProductEventsResource(RestApi restApi, ApiStackProps apiStackProps, Resource productsResource) {
 
